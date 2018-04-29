@@ -53,17 +53,17 @@ class Sets:
 
         if self._replacement_policy == "NRU":
             wanted_rpbit = 1
-        elif self._replacement_policy == "SSRIP":
-            wanted_rpbit = pow(2, self._m-1) # set the wanted rpbit to be 2^m-1
-
+        elif self._replacement_policy == "SRRIP":
+            wanted_rpbit = pow(2, self._m) - 1 # set the wanted rpbit to be 2^m-1
+            
         temp = Block() # Make a helper block to compare
         temp.set_pos(len(self._structure)+1) #set pos to be higher than the last
-        if self._replacement_policy == "NRU":
-            for each_block in self._structure:
-                if self._structure[each_block].get_rpbit() == wanted_rpbit:
-                    if temp.get_pos() > self._structure[each_block].get_pos():
-                        if self._structure[each_block].get_tag() != 0:
-                            temp = self._structure[each_block]
+
+        for each_block in self._structure:
+            if self._structure[each_block].get_rpbit() == wanted_rpbit:
+                if temp.get_pos() > self._structure[each_block].get_pos():
+                    if self._structure[each_block].get_tag() != 0:
+                        temp = self._structure[each_block]
 
         return temp # return block with lowest pos
 
@@ -177,11 +177,11 @@ class Sets:
         else: # is NOT in cache
             if not self._full: # theres free space
                 if ls == 0:
-                    self._structure[tag] = Block(tag, 0, pow(2, m-2)) # rrpv enters in 2
+                    self._structure[tag] = Block(tag, 0, pow(2, m) - 2) # rrpv enters in 2
                     self._structure[tag].set_pos(len(self._structure))
                     result.append(LOAD_MISS)
                 elif ls == 1:
-                    self._structure[tag] = Block(tag, 1, pow(2, m-2)) # gets in dirty rrpv enters in 2
+                    self._structure[tag] = Block(tag, 1, pow(2, m) - 2) # gets in dirty rrpv enters in 2
                     self._structure[tag].set_pos(len(self._structure))
                     result.append(STORE_MISS)
                 self._update_free() # update free space
@@ -190,7 +190,7 @@ class Sets:
             else: # theres no free space
                 eviction_block = self._get_firsthighrpbit()
 
-                if eviction_block.get_tag() == 0: # Theres no block with rpbit == 2^m-1
+                while eviction_block.get_tag() == 0: # Theres no block with rpbit == 2^m-1
                     self._update_rpbit() # increment rppv
                     eviction_block = self._get_firsthighrpbit() # try again
                 
@@ -204,11 +204,11 @@ class Sets:
                     
                 if ls == 0:
                     result.append(LOAD_MISS)
-                    self._structure[tag] = Block(tag, 0, pow(2,m-2))
+                    self._structure[tag] = Block(tag, 0, pow(2, m) - 2)
                     self._structure[tag].set_pos(temp_pos)
                 elif ls == 1:
                     result.append(STORE_MISS)
-                    self._structure[tag] = Block(tag, 1, pow(2,m-2))
+                    self._structure[tag] = Block(tag, 1, pow(2, m) - 2)
                     self._structure[tag].set_pos(temp_pos)
                 return result
 

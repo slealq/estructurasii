@@ -209,7 +209,7 @@ def main(argv):
         elif opt == "--debug":
             options["debug"] = True
         elif opt == "-m":
-            opttions["m"] = arg
+            options["m"] = arg
 
     for each_option in options:
         if each_option == 'm':
