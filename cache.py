@@ -7,286 +7,7 @@ import json
 from time import time
 from math import log
 from pprint import pprint
-
-# Define constants
-DIRTY_EVICTION = 1
-LOAD_MISS = 2
-STORE_MISS = 3
-LOAD_HIT = 4
-STORE_HIT = 5
-
-class Block:
-    """ Block contains the necesary information to do 
-    the replacements, and also holds information about the 
-    data as Tag, Dirty Evictions, and so. A block might
-    also be called a Line. """
-
-    def __init__(self, tag=0, dbit=0, rh=0):
-        self._tag = tag
-        self._dirty_bit = dbit
-        self._replacement_helper = rh
-        self._pos = 0
-        
-    def add(self, tag):
-        self._tag = tag
-
-    def get_tag(self):
-        return self._tag
-
-    def set_dirty(self, dirty_bit):
-        self._dirty_bit = dirty_bit
-
-    def get_dirty(self):
-        return self._dirty_bit
-        
-    def set_rpbit(self, replacement_helper):
-        self._replacement_helper = replacement_helper
-
-    def incr_rpbit(self):
-        self._replacement_helper += 1
-        
-    def get_rpbit(self):
-        return self._replacement_helper
-
-    def set_pos(self, pos):
-        self._pos = pos
-
-    def get_pos(self):
-        return self._pos
-
-    def incr_pos(self, pos):
-        self._pos += 1
-
-    def __repr__(self):
-        return str(self.__dict__)
-        
-class Sets:
-    """ Sets are the different blocks related to 
-    one index in a cache. Size defines how many 
-    blocks are, and also you need to define the replacement policy 
-    in order to work """
-
-    def __init__(self, asociativity, replacement_policy):
-        self._asociativity = asociativity
-        self._replacement_policy = replacement_policy
-        self._structure = {}
-        self._full = False
-
-    def _update_free(self):
-        """ Updates the full variable according to 
-        the free space available in the sets. """
-        
-        if len(self._structure) >= self._asociativity:
-            self._full = True
-        else:
-            self._full = False
-
-    def _update_rpbit(self):
-        if self._replacement_policy == "LRU":
-            for each_block in self._structure:
-                self._structure[each_block].incr_rpbit()
-        if self._replacement_policy == "NRU":
-            for each_block in self._structure:
-                self._structure[each_block].set_rpbit(1)
-                
-    def _get_highrpbit(self):
-        temp = Block()
-        for each_block in self._structure:
-            if temp.get_rpbit() < self._structure[each_block].get_rpbit():
-                temp = self._structure[each_block]
-
-        return temp # return block with highest rpbit
-
-    def _get_firsthighrpbit(self):
-        """ This is a helper function for the NRU replacement
-        policy. The idea is that if there's a first 1, the return that
-        block. If this block returns a block with tag 0, it didn't find
-        anything. """
-
-        temp = Block()
-        temp.set_pos(len(self._structure)+1) #set pos to be higher than the last
-        for each_block in self._structure:
-            if self._structure[each_block].get_rpbit() == 1:
-                if temp.get_pos() > self._structure[each_block].get_pos():
-                    if self._structure[each_block].get_tag() != 0:
-                        temp = self._structure[each_block]
-                        
-        return temp # return block with lowest pos
-
-    def _lru(self, tag, ls, result):
-        """ Logic for the LRU replacement policy. """
-
-        self._update_rpbit()
-        
-        if tag in self._structure: # is in cache?
-            self._structure[tag].set_rpbit(0)
-            if ls == 0:
-                result.append(LOAD_HIT)
-            elif ls == 1:
-                self._structure[tag].set_dirty(1)
-                result.append(STORE_HIT)
-                
-            return result
-            
-        else: # is NOT in cache
-            if not self._full: # theres free space
-                if ls == 0:
-                    self._structure[tag] = Block(tag, 0, 0)
-                    result.append(LOAD_MISS)
-                elif ls == 1:
-                    self._structure[tag] = Block(tag, 1, 0) # gets in dirty
-                    result.append(STORE_MISS)
-                self._update_free() # update free space
-                return result
-
-            else: # theres no free space
-                eviction_block = self._get_highrpbit()
-                if eviction_block.get_dirty() == 1: # check if eviction is dirty
-                    result.append(DIRTY_EVICTION)
-                self._structure.pop(eviction_block.get_tag()) # evict
-                
-                if ls == 0:
-                    result.append(LOAD_MISS)
-                    self._structure[tag] = Block(tag, 0, 0)
-                elif ls == 1:
-                    result.append(STORE_MISS)
-                    self._structure[tag] = Block(tag, 1, 0)
-                return result
-
-    def _nru(self, tag, ls, result):
-        """ Replacement policy for NRU """
-
-        if tag in self._structure: # is in cache?
-            self._update_rpbit()
-            self._structure[tag].set_rpbit(0)
-            if ls == 0:
-                result.append(LOAD_HIT)
-            elif ls == 1:
-                self._structure[tag].set_dirty(1)
-                result.append(STORE_HIT)
-                
-            return result
-
-        else: # is NOT in cache
-            if not self._full: # theres free space
-                if ls == 0:
-                    self._structure[tag] = Block(tag, 0, 0)
-                    self._structure[tag].set_pos(len(self._structure))
-                    result.append(LOAD_MISS)
-                elif ls == 1:
-                    self._structure[tag] = Block(tag, 1, 0) # gets in dirty
-                    self._structure[tag].set_pos(len(self._structure))
-                    result.append(STORE_MISS)
-                self._update_free() # update free space
-                return result
-
-            else: # theres no free space
-                eviction_block = self._get_firsthighrpbit()
-
-                if eviction_block.get_tag() == 0: # Theres no block with rpbit == 1
-                    self._update_rpbit() # set all rpbits to 1
-                    eviction_block = self._get_firsthighrpbit() # try again
-                
-                if eviction_block.get_dirty() == 1: # check if eviction is dirty
-                    result.append(DIRTY_EVICTION)
-
-                temp_pos = eviction_block.get_pos() # save the pos of this block
-                self._structure.pop(eviction_block.get_tag()) # evict
-                
-                eviction_block 
-                    
-                if ls == 0:
-                    result.append(LOAD_MISS)
-                    self._structure[tag] = Block(tag, 0, 0)
-                    self._structure[tag].set_pos(temp_pos)
-                elif ls == 1:
-                    result.append(STORE_MISS)
-                    self._structure[tag] = Block(tag, 1, 0)
-                    self._structure[tag].set_pos(temp_pos)
-                return result
-
-    def _srrip(self, tag, ls, result):
-        """ Replacement policy for SRRIP. Very similar to nru """
-
-        if tag in self._structure: # is in cache?
-            self._update_rpbit()
-            self._structure[tag].set_rpbit(0)
-            if ls == 0:
-                result.append(LOAD_HIT)
-            elif ls == 1:
-                self._structure[tag].set_dirty(1)
-                result.append(STORE_HIT)
-                
-            return result
-
-        else: # is NOT in cache
-            if not self._full: # theres free space
-                if ls == 0:
-                    self._structure[tag] = Block(tag, 0, 0)
-                    self._structure[tag].set_pos(len(self._structure))
-                    result.append(LOAD_MISS)
-                elif ls == 1:
-                    self._structure[tag] = Block(tag, 1, 0) # gets in dirty
-                    self._structure[tag].set_pos(len(self._structure))
-                    result.append(STORE_MISS)
-                self._update_free() # update free space
-                return result
-
-            else: # theres no free space
-                eviction_block = self._get_firsthighrpbit()
-
-                if eviction_block.get_tag() == 0: # Theres no block with rpbit == 1
-                    self._update_rpbit() # set all rpbits to 1
-                    eviction_block = self._get_firsthighrpbit() # try again
-                
-                if eviction_block.get_dirty() == 1: # check if eviction is dirty
-                    result.append(DIRTY_EVICTION)
-
-                temp_pos = eviction_block.get_pos() # save the pos of this block
-                self._structure.pop(eviction_block.get_tag()) # evict
-                
-                eviction_block 
-                    
-                if ls == 0:
-                    result.append(LOAD_MISS)
-                    self._structure[tag] = Block(tag, 0, 0)
-                    self._structure[tag].set_pos(temp_pos)
-                elif ls == 1:
-                    result.append(STORE_MISS)
-                    self._structure[tag] = Block(tag, 1, 0)
-                    self._structure[tag].set_pos(temp_pos)
-                return result
-
-
-    def access(self, tag, ls):
-        """ Access is the method that arranges the data structure
-        with each call for memory. ls is 0 for load and 1 for store. 
-        In load, you must see if its a hit or miss based on if its 
-        or not in the cache. If its not, then you should bring it 
-        to cache, and evict data if theres no free space in cache.
-        Dirty evictions are when a data was modified with store, 
-        and then sent to principal memory. Only should look for them
-        when evicting a data. If theres free space you only add the 
-        data. """
-
-        result = []
-        
-        ls = int(ls)
-        
-        if self._replacement_policy == "LRU":
-            result = self._lru(tag, ls, result)
-                    
-        elif self._replacement_policy == "NRU":
-            result = self._nru(tag, ls, result)
-    
-        else:
-            raise TypeError("The replacement Policy you asked for is not implemented: "+str(self._replacement_policy))
-
-        return result
-                
-    def __repr__(self):
-        """ Representation for cache printing. """
-        return str(self._structure)
+from sets import *
                 
 class Cache:
     """ Define the $ object so that replacement policies are done
@@ -300,10 +21,11 @@ class Cache:
         self._index_size = int(log(self._lines, 2))
         self._offset_size = int(log(self._line_size, 2))
         self._cache = {}
+        self._m = int(options['m']) # this value is only used for srrip
         
         for each_index in range(0, pow(2,self._index_size)):
             # cache structure is going to be a dict for the index, with each way inside
-            self._cache[bin(each_index)[2:].zfill(self._index_size)] = Sets(self._asociativity, self._replacement_policy)
+            self._cache[bin(each_index)[2:].zfill(self._index_size)] = Sets(self._asociativity, self._replacement_policy, self._m)
 
     def _get_params(self, bin_num):
         """ Returns the tag, index, offset of an address. bin_num is 
@@ -460,11 +182,12 @@ def main(argv):
                'asociativity' : '',
                'replacement_policy' : '',
                'miss_penalty' : '',
-               'debug' : False
+               'debug' : False,
+               'm' : 1
     }
     
     try:
-        opts, args = getopt.getopt(argv, "t:l:a:h", ["rp=", "mp=", "debug"])
+        opts, args = getopt.getopt(argv, "t:l:a:m:h", ["rp=", "mp=", "debug"])
     except getopt.GetoptError:
         print 'cache.py -t <CacheSize(KB)> -l <LineSize(Bytes)> -a <Asociativity> --rp<LRU, NRU, SRRIP, Random> --mp <MissPenalty>'
         sys.exit(2)
@@ -485,8 +208,12 @@ def main(argv):
             options['miss_penalty'] = arg
         elif opt == "--debug":
             options["debug"] = True
+        elif opt == "-m":
+            opttions["m"] = arg
 
     for each_option in options:
+        if each_option == 'm':
+            continue # m is not always wanted
         if options[each_option] == '':
             raise SyntaxError('One argument was not given. Use ./cache.py -h for help.')
         if each_option != "replacement_policy" :
