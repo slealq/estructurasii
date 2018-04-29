@@ -205,6 +205,59 @@ class Sets:
                     self._structure[tag].set_pos(temp_pos)
                 return result
 
+    def _srrip(self, tag, ls, result):
+        """ Replacement policy for SRRIP. Very similar to nru """
+
+        if tag in self._structure: # is in cache?
+            self._update_rpbit()
+            self._structure[tag].set_rpbit(0)
+            if ls == 0:
+                result.append(LOAD_HIT)
+            elif ls == 1:
+                self._structure[tag].set_dirty(1)
+                result.append(STORE_HIT)
+                
+            return result
+
+        else: # is NOT in cache
+            if not self._full: # theres free space
+                if ls == 0:
+                    self._structure[tag] = Block(tag, 0, 0)
+                    self._structure[tag].set_pos(len(self._structure))
+                    result.append(LOAD_MISS)
+                elif ls == 1:
+                    self._structure[tag] = Block(tag, 1, 0) # gets in dirty
+                    self._structure[tag].set_pos(len(self._structure))
+                    result.append(STORE_MISS)
+                self._update_free() # update free space
+                return result
+
+            else: # theres no free space
+                eviction_block = self._get_firsthighrpbit()
+
+                if eviction_block.get_tag() == 0: # Theres no block with rpbit == 1
+                    self._update_rpbit() # set all rpbits to 1
+                    eviction_block = self._get_firsthighrpbit() # try again
+                
+                if eviction_block.get_dirty() == 1: # check if eviction is dirty
+                    result.append(DIRTY_EVICTION)
+
+                temp_pos = eviction_block.get_pos() # save the pos of this block
+                self._structure.pop(eviction_block.get_tag()) # evict
+                
+                eviction_block 
+                    
+                if ls == 0:
+                    result.append(LOAD_MISS)
+                    self._structure[tag] = Block(tag, 0, 0)
+                    self._structure[tag].set_pos(temp_pos)
+                elif ls == 1:
+                    result.append(STORE_MISS)
+                    self._structure[tag] = Block(tag, 1, 0)
+                    self._structure[tag].set_pos(temp_pos)
+                return result
+
+
     def access(self, tag, ls):
         """ Access is the method that arranges the data structure
         with each call for memory. ls is 0 for load and 1 for store. 
