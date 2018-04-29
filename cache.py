@@ -98,6 +98,11 @@ class Sets:
         return temp # return block with highest rpbit
 
     def _get_firsthighrpbit(self):
+        """ This is a helper function for the NRU replacement
+        policy. The idea is that if there's a first 1, the return that
+        block. If this block returns a block with tag 0, it didn't find
+        anything. """
+
         temp = Block()
         temp.set_pos(len(self._structure)+1) #set pos to be higher than the last
         for each_block in self._structure:
@@ -105,7 +110,7 @@ class Sets:
                 if temp.get_pos() > self._structure[each_block].get_pos():
                     if self._structure[each_block].get_tag() != 0:
                         temp = self._structure[each_block]
-
+                        
         return temp # return block with lowest pos
 
     def _lru(self, tag, ls, result):
@@ -164,7 +169,6 @@ class Sets:
 
         else: # is NOT in cache
             if not self._full: # theres free space
-                self._update_rpbit()
                 if ls == 0:
                     self._structure[tag] = Block(tag, 0, 0)
                     self._structure[tag].set_pos(len(self._structure))
@@ -178,13 +182,18 @@ class Sets:
 
             else: # theres no free space
                 eviction_block = self._get_firsthighrpbit()
+
+                if eviction_block.get_tag() == 0: # Theres no block with rpbit == 1
+                    self._update_rpbit() # set all rpbits to 1
+                    eviction_block = self._get_firsthighrpbit() # try again
+                
                 if eviction_block.get_dirty() == 1: # check if eviction is dirty
                     result.append(DIRTY_EVICTION)
 
                 temp_pos = eviction_block.get_pos() # save the pos of this block
                 self._structure.pop(eviction_block.get_tag()) # evict
-
-                self._update_rpbit()
+                
+                eviction_block 
                     
                 if ls == 0:
                     result.append(LOAD_MISS)
@@ -278,9 +287,16 @@ class Cache:
             print "Offset size: " + str(self._offset_size)
             print "Tag, Index, Offset: "
             print (tag, index, offset)
-
+            print "Before: \n"
+            print_cache(str(self._cache[index]))
+            print "\n"
+            
         result = self._cache[index].access(tag, ls) # access this cache index
-        
+        if debug:
+            print "After:\n"
+            print_cache(str(self._cache[index]))
+            print "\n"
+                
         return result
             
     def __str__(self):
@@ -305,7 +321,7 @@ def start_simulation(data, options):
               'store_misses':0,
               'store_hits':0,
               'dirty_evictions':0,
-              'memory_access' : '',
+              'memory_access' : 0,
               'overall_miss_rate' : '',
               'read_miss_rate' : '',
               'avg_memory_access_time' : '',
@@ -320,6 +336,7 @@ def start_simulation(data, options):
     for each_line in data:
         parts = each_line.split()
         output['instructions'] += int(parts[-1]) # the last value in line is the ic
+        output['memory_access'] += 1
         result = cache.write(parts[2], parts[1], debug)
 
         if LOAD_MISS in result:
@@ -333,21 +350,22 @@ def start_simulation(data, options):
         if DIRTY_EVICTION in result:
             output['dirty_evictions'] += 1
 
-        # count exection time
-        if LOAD_HIT in result or LOAD_MISS in result:
-            output['execution_time'] += 1 + int(options['miss_penalty'])
-        else:
-            output['execution_time'] += 1
 
+
+        # if debug mode is enabled
         if debug:
             print "Flags Raised: " + str(result)
-            print "\nCache Content: "
-            print_cache(str(cache))
-            print
+            
 
     output['total_misses'] = output['load_misses'] + output['store_misses']
     output['total_hits'] = output['load_hits'] + output['store_hits']
-        
+    output['execution_time'] = (output['instructions'] +
+                                int(options['miss_penalty'])*output['load_misses'])
+    output['overall_miss_rate'] = float(output['total_misses'])/float(output['memory_access'])
+    output['read_miss_rate'] = float(output['load_misses'])/float(output['load_hits']+output['load_misses'])
+    # Note that all hits take 1 clock cycle (for load and for store
+    output['avg_memory_access_time'] = 1 + output['overall_miss_rate']*float(options['miss_penalty'])
+    
     return dict(output, **options)
 
 def print_results(result):
@@ -360,25 +378,25 @@ def print_results(result):
     print "---------------------------------------------"
     print "Cache Size (KB):\t\t" + str(result['cache_size'])
     print "Cache Asociativiy:\t\t" + str(result['asociativity'])
-    print "Cache Block Size (Bytes):\t" + str(result['asociativity'])
+    print "Cache Block Size (Bytes):\t" + str(result['line_size'])
     print "Cache Replacement Policy:\t" + str(result['replacement_policy'])
     print "Miss Penalty (Cycles):\t\t" + str(result['miss_penalty'])
     print "---------------------------------------------"
     print "Simulation results"
     print "---------------------------------------------"
-    print "Execution time (cycles):\t" + str(result['execution_time'])
-    print "Instructions:\t\t\t" + str(result['instructions'])
-    print "Memory Access:\t\t" + str(result['memory_access'])
+    print "Execution time (cycles):\t" + "{:,}".format(result['execution_time'])
+    print "Instructions:\t\t\t" + "{:,}".format(result['instructions'])
+    print "Memory Accesses:\t\t" + "{:,}".format(result['memory_access'])
     print "Overall miss rate:\t\t" + str(result['overall_miss_rate'])
-    print "Read miss rate:\t\t" + str(result['read_miss_rate'])
+    print "Read miss rate:\t\t\t" + str(result['read_miss_rate'])
     print "Avg. mem. access time (cyc):\t" + str(result['avg_memory_access_time'])
-    print "Dirty Evictions:\t\t" + str(result['dirty_evictions'])
-    print "Load misses:\t\t\t" + str(result['load_misses'])
-    print "Store misses:\t\t\t" + str(result['store_misses'])
-    print "Total misses:\t\t\t" + str(result['total_misses'])
-    print "Load hits:\t\t\t" + str(result['load_hits'])
-    print "Store hits:\t\t\t" + str(result['store_hits'])
-    print "Total hits:\t\t\t" + str(result['total_hits'])
+    print "Dirty Evictions:\t\t" + "{:,}".format(result['dirty_evictions'])
+    print "Load misses:\t\t\t" + "{:,}".format(result['load_misses'])
+    print "Store misses:\t\t\t" + "{:,}".format(result['store_misses'])
+    print "Total misses:\t\t\t" + "{:,}".format(result['total_misses'])
+    print "Load hits:\t\t\t" + "{:,}".format(result['load_hits'])
+    print "Store hits:\t\t\t" + "{:,}".format(result['store_hits'])
+    print "Total hits:\t\t\t" + "{:,}".format(result['total_hits'])
     print "---------------------------------------------"
     
 def main(argv):
