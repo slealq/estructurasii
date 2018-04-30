@@ -1,3 +1,4 @@
+import random
 from block import Block
 
 # Define constants
@@ -17,6 +18,8 @@ class Sets:
         self._asociativity = asociativity
         self._replacement_policy = replacement_policy
         self._m = m #only used if replacement policy is srrip
+        rpdict = {"LRU":self._lru, "NRU":self._nru, "SRRIP":self._srrip, "RANDOM":self._random} # Function to use for replacement
+        self._rppolicy = rpdict[self._replacement_policy] # Define the function to use when replacing
         self._structure = {}
         self._full = False
 
@@ -45,17 +48,12 @@ class Sets:
 
         return temp # return block with highest rpbit
 
-    def _get_firsthighrpbit(self):
+    def _get_firsthighrpbit(self, wanted_rpbit):
         """ This is a helper function for the NRU replacement
         policy. The idea is that if there's a first 1, the return that
         block. If this block returns a block with tag 0, it didn't find
         anything. """
 
-        if self._replacement_policy == "NRU":
-            wanted_rpbit = 1
-        elif self._replacement_policy == "SRRIP":
-            wanted_rpbit = pow(2, self._m) - 1 # set the wanted rpbit to be 2^m-1
-            
         temp = Block() # Make a helper block to compare
         temp.set_pos(len(self._structure)+1) #set pos to be higher than the last
 
@@ -67,6 +65,13 @@ class Sets:
 
         return temp # return block with lowest pos
 
+    def _get_random(self):
+        """ Return a random block inside the structure """
+
+        random_block = random.choice(self._structure.keys())
+        return self._structure[random_block]
+        
+    
     def _lru(self, tag, ls, result):
         """ Logic for the LRU replacement policy. """
 
@@ -134,11 +139,11 @@ class Sets:
                 return result
 
             else: # theres no free space
-                eviction_block = self._get_firsthighrpbit()
+                eviction_block = self._get_firsthighrpbit(1)
 
                 if eviction_block.get_tag() == 0: # Theres no block with rpbit == 1
                     self._update_rpbit() # set all rpbits to 1
-                    eviction_block = self._get_firsthighrpbit() # try again
+                    eviction_block = self._get_firsthighrpbit(1) # try again
                 
                 if eviction_block.get_dirty() == 1: # check if eviction is dirty
                     result.append(DIRTY_EVICTION)
@@ -146,8 +151,6 @@ class Sets:
                 temp_pos = eviction_block.get_pos() # save the pos of this block
                 self._structure.pop(eviction_block.get_tag()) # evict
                 
-                eviction_block 
-                    
                 if ls == 0:
                     result.append(LOAD_MISS)
                     self._structure[tag] = Block(tag, 0, 0)
@@ -163,7 +166,9 @@ class Sets:
         but with 2^M statues."""
 
         m = self._m # only for simplicity
-
+        self._enter_pos = pow(2, m) - 2
+        self._search_pos = pow(2, m) - 1
+        
         if tag in self._structure: # is in cache?
             self._structure[tag].set_rpbit(0) # set rrpv to 0
             if ls == 0:
@@ -177,22 +182,22 @@ class Sets:
         else: # is NOT in cache
             if not self._full: # theres free space
                 if ls == 0:
-                    self._structure[tag] = Block(tag, 0, pow(2, m) - 2) # rrpv enters in 2
+                    self._structure[tag] = Block(tag, 0, self._enter_pos) # rrpv enters in 2
                     self._structure[tag].set_pos(len(self._structure))
                     result.append(LOAD_MISS)
                 elif ls == 1:
-                    self._structure[tag] = Block(tag, 1, pow(2, m) - 2) # gets in dirty rrpv enters in 2
+                    self._structure[tag] = Block(tag, 1, self._enter_pos) # gets in dirty rrpv enters in 2
                     self._structure[tag].set_pos(len(self._structure))
                     result.append(STORE_MISS)
                 self._update_free() # update free space
                 return result
 
             else: # theres no free space
-                eviction_block = self._get_firsthighrpbit()
+                eviction_block = self._get_firsthighrpbit(self._search_pos)
 
                 while eviction_block.get_tag() == 0: # Theres no block with rpbit == 2^m-1
                     self._update_rpbit() # increment rppv
-                    eviction_block = self._get_firsthighrpbit() # try again
+                    eviction_block = self._get_firsthighrpbit(self._search_pos) # try again
                 
                 if eviction_block.get_dirty() == 1: # check if eviction is dirty
                     result.append(DIRTY_EVICTION)
@@ -200,16 +205,52 @@ class Sets:
                 temp_pos = eviction_block.get_pos() # save the pos of this block
                 self._structure.pop(eviction_block.get_tag()) # evict
                 
-                eviction_block 
-                    
                 if ls == 0:
-                    result.append(LOAD_MISS)
-                    self._structure[tag] = Block(tag, 0, pow(2, m) - 2)
+                    self._structure[tag] = Block(tag, 0, self._enter_pos)
                     self._structure[tag].set_pos(temp_pos)
                 elif ls == 1:
-                    result.append(STORE_MISS)
-                    self._structure[tag] = Block(tag, 1, pow(2, m) - 2)
+                    self._structure[tag] = Block(tag, 1, self._enter_pos)
                     self._structure[tag].set_pos(temp_pos)
+                return result
+
+    def _random(self, tag, ls, result):
+        """ Implement a replacement policy, where on miss, 
+        the cache replaces a random block. """
+
+        if tag in self._structure: # is in cache
+            if ls == 0:
+                result.append(LOAD_HIT)
+            elif ls == 1:
+                self._structure[tag].set_dirty(1) #  if store set dirty
+                result.append(STORE_HIT)
+                
+            return result
+
+        else: # is NOT in cache
+            if not self._full: # theres free space
+                if ls == 0:
+                    self._structure[tag] = Block(tag) # only tag is used
+                    result.append(LOAD_MISS)
+                elif ls == 1:
+                    self._structure[tag] = Block(tag) # only tag is used
+                    result.append(STORE_MISS)
+                self._update_free() # update free space
+                return result
+
+            else: # theres no free space
+                eviction_block = self._get_random() # get a random eviction block
+
+                if eviction_block.get_dirty() == 1: # check dirt eviction
+                    result.append(DIRTY_EVICTION)
+
+                self._structure.pop(eviction_block.get_tag()) # evict
+                
+                if ls == 0:
+                    result.append(LOAD_MISS)
+                    self._structure[tag] = Block(tag)
+                elif ls == 1:
+                    result.append(STORE_MISS)
+                    self._structure[tag] = Block(tag)
                 return result
 
 
@@ -225,20 +266,9 @@ class Sets:
         data. M is for the SRRIP implementation"""
 
         result = []
-        
         ls = int(ls)
-        
-        if self._replacement_policy == "LRU":
-            result = self._lru(tag, ls, result)
-                    
-        elif self._replacement_policy == "NRU":
-            result = self._nru(tag, ls, result)
 
-        elif self._replacement_policy == "SRRIP":
-            result = self._srrip(tag, ls, result)
-    
-        else:
-            raise TypeError("The replacement Policy you asked for is not implemented: "+str(self._replacement_policy))
+        result = self._rppolicy(tag, ls, result) # this is defined at the beginning
 
         return result
                 
