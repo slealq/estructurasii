@@ -44,6 +44,9 @@ The ./cache.exe is a program used for simulating cache. Its input is a trace fil
           example --csv mcf outputs the result into a csv file, with the tracename in one column
      -m (Only used for SRRIP)
           example --rp SRRIP -m 2 (See --rp for more details
+          
+# Test traces
+In order to run this code, you will need the test traces used in the scripts. You can download them going to this link https://drive.google.com/drive/folders/15Z0Z0cpxmuLTrfKjuVrbsAw4fJ9tGI2s or, use traces done by Jeancachu: https://github.com/jeancahu/cache_simulator_test_traces (This implies that you modify the simulation scripts).
 
 # Simulation expected time
 For a single run of the ./cache.exe, the worst case using an AMD PRO A10-8700B R6, 10 Compute Cores 4C+6G @ 4x 1.8GHz, was 80 seconds.
