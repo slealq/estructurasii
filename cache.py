@@ -4,6 +4,8 @@ import sys
 import getopt
 import ast
 import json
+import csv
+import os.path
 from time import time
 from math import log
 from pprint import pprint
@@ -143,6 +145,26 @@ def start_simulation(data, options):
     
     return dict(output, **options)
 
+def print_csv(result):
+    """ Given the results, print all the variables
+    into a csv file """
+
+    # we need to open a csv file, could be
+    # named with the same name, and if other
+    # scipt opens the file, then, fill the columns that
+    # are not used
+
+    if os.path.isfile('simulation_output.csv') : #check if theres already a file
+        with open('simulation_output.csv', 'a') as f:
+            w = csv.writer(f)
+            w.writerow(result.values())
+
+    else:  # if doesnt exists, create the first column
+        with open('simulation_output.csv', 'wb') as f :
+            w  = csv.writer(f)
+            w.writerow(result.keys())
+            w.writerow(result.values())
+
 def print_results(result):
     """ Given a result dictionary, with all necesary information
     print the content of the dictionary. 
@@ -183,11 +205,13 @@ def main(argv):
                'replacement_policy' : '',
                'miss_penalty' : '',
                'debug' : False,
+               'csv' : False,
+               'tracename' : 0,
                'm' : 1
     }
     
     try:
-        opts, args = getopt.getopt(argv, "t:l:a:m:h", ["rp=", "mp=", "debug"])
+        opts, args = getopt.getopt(argv, "t:l:a:m:h", ["rp=", "mp=", "debug", "csv="])
     except getopt.GetoptError:
         print 'cache.py -t <CacheSize(KB)> -l <LineSize(Bytes)> -a <Asociativity> --rp<LRU, NRU, SRRIP, Random> --mp <MissPenalty>'
         sys.exit(2)
@@ -210,6 +234,9 @@ def main(argv):
             options["debug"] = True
         elif opt == "-m":
             options["m"] = arg
+        elif opt == "--csv":
+            options["csv"] = True
+            options["tracename"] = arg
 
     for each_option in options:
         if each_option == 'm':
@@ -223,6 +250,11 @@ def main(argv):
                 
     result = start_simulation(sys.stdin.readlines(), options)
     print_results(result)
+
+    if options['csv'] == True:
+        # export output in csv
+        print_csv(result)
+        
     print "\nElapsed time: " + str(time() - start_time)
     
 if __name__ == "__main__":
