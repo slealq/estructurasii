@@ -1,7 +1,12 @@
 # estructurasii
 Curso de Estructuras de Computadores II, Universidad de Costa Rica
 
-# Dependencies:
+Clone this repo with:
+
+     git clone https://github.com/slealq/estructurasii
+     cd estructurasii
+
+# Dependencies
 The code was written in Python 2.7, please check your version with python2 --version (If this fails, install python2). The following was tested using Ubuntu Trusty and Arch Linux 4.16.4-1.
 
 You'll need two programs for compiling Python code (Nuitka), and the other for running parallel task (GNU Parallel). For the following command, you are assumed to have pip. If you don't, install it using sudo apt-get install python-pip:
@@ -39,7 +44,19 @@ The ./cache.exe is a program used for simulating cache. Its input is a trace fil
           example --csv mcf outputs the result into a csv file, with the tracename in one column
      -m (Only used for SRRIP)
           example --rp SRRIP -m 2 (See --rp for more details
+
+# Simulation expected time
+For a single run of the ./cache.exe, the worst case using an AMD PRO A10-8700B R6, 10 Compute Cores 4C+6G @ 4x 1.8GHz, was 80 seconds.
+
+For simulation scripts (containning several calls of ./cache.exe) results were:
+
+     simulation_1: 1m35s
      
+     simulation_2: 1m31s
+     
+     simulation_3: 14m21s
+     
+Note: Simulation_3 runs 40 simulations inside, so it will take a while no matter what.
 
 # Results: 
 You can read the following paper to see our pick of parameters according to simulation results: https://www.sharelatex.com/read/xxkftxvjfskf. 
