@@ -1,0 +1,4 @@
+#!/bin/sh
+
+rm simulation_output.csv # clean simulation csv
+parallel --verbose ::: "gunzip -c mcf.trace.gz | ./cache.exe -t 128 -a 1 -l 16 --rp RANDOM --mp 2 --csv mcf" "gunzip -c art.trace.gz | ./cache.exe -t 128 -a 1 -l 16 --rp RANDOM --mp 2 --csv art" "gunzip -c mcf.trace.gz | ./cache.exe -t 128 -a 1 -l 32 --rp RANDOM --mp 4 --csv mcf" "gunzip -c art.trace.gz | ./cache.exe -t 128 -a 1 -l 32 --rp RANDOM --mp 4 --csv art" "gunzip -c mcf.trace.gz | ./cache.exe -t 128 -a 1 -l 64 --rp RANDOM --mp 8 --csv mcf" "gunzip -c art.trace.gz | ./cache.exe -t 128 -a 1 -l 64 --rp RANDOM --mp 8 --csv art"
